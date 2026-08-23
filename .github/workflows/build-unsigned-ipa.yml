@@ -30,6 +30,12 @@ jobs:
       - name: Install build dependency
         run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ldid
 
+      # The app links against -lxpf before its Xcode Run Script phase runs.
+      - name: Build XPF library before linking the app
+        run: |
+          cd darksword-kexploit-fun/XPF
+          make all
+
       - name: Set release version
         id: version
         run: |
