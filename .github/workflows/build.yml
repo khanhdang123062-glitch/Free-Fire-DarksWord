@@ -26,6 +26,11 @@ jobs:
       - name: Install ldid
         run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ldid
 
+      - name: Build XPF (libxpf.dylib)
+        run: |
+          cd darksword-kexploit-fun/XPF
+          make all
+
       - name: Build (no signing)
         run: |
           xcodebuild build \
