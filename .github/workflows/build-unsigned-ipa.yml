@@ -56,11 +56,11 @@ jobs:
 
       - name: Package unsigned IPA
         run: |
-          app_path="$GITHUB_WORKSPACE/build/Products/Release-iphoneos/kfun.app"
+          app_path="$(find "$GITHUB_WORKSPACE/build/Products" -maxdepth 3 -type d -name '*.app' -print -quit)"
           staging_path="$RUNNER_TEMP/ipa-staging"
           ipa_path="$GITHUB_WORKSPACE/build/Free Fire DS.ipa"
 
-          test -d "$app_path"
+          test -n "$app_path" && test -d "$app_path"
           mkdir -p "$staging_path/Payload"
           ditto "$app_path" "$staging_path/Payload/kfun.app"
           (
