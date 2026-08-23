@@ -1,7 +1,12 @@
 name: Build IPA (signed)
 
 on:
+  push:
+    branches: [ main, "codex/*" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -79,9 +84,21 @@ jobs:
             -exportOptionsPlist ExportOptions.plist \
             -exportPath build/output
 
+          mv build/output/*.ipa "build/output/Free Fire DS [KDC].ipa"
+
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Excalibur-IPA
           path: build/output/*.ipa
           retention-days: 14
+
+      - name: Create Release
+        run: |
+          gh release create "v${{ github.run_number }}" \
+            "build/output/Free Fire DS [KDC].ipa" \
+            --repo "${{ github.repository }}" \
+            --title "Free Fire DS [KDC]" \
+            --notes "Build #${{ github.run_number }} — commit ${{ github.sha }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
