@@ -1,0 +1,55 @@
+name: Build unsigned IPA (push)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-unsigned-ipa:
+    runs-on: macos-14
+    timeout-minutes: 30
+    env:
+      PROJECT: darksword-kexploit-fun.xcodeproj
+      SCHEME: darksword-kexploit-fun
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.2'
+
+      - name: Build app (unsigned, device)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            COMPILER_INDEX_STORE_ENABLE=NO | tail -100
+
+      - name: Pseudo-sign and package IPA
+        run: |
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install ldid
+          APP=$(find build/Build/Products -type d -name "*.app" ! -path "*Index*" | head -1)
+          echo "App bundle: $APP"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist"
+          ldid -S "$APP"
+          mkdir -p Payload
+          rm -rf Payload/*
+          cp -R "$APP" Payload/
+          zip -qry kfun-unsigned.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kfun-unsigned-ipa-${{ github.run_number }}
+          path: kfun-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
