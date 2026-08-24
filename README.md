@@ -5,7 +5,7 @@ excalibur is a project that use DarkSword exploit for customize your iPhone, inc
 
 The workflow `.github/workflows/build-ipa.yml` builds on a GitHub-hosted macOS runner. It creates a signed ad-hoc IPA and uploads it as an Actions artifact. It only runs when started manually, so a normal push will not accidentally publish an IPA.
 
-If you will sign the IPA yourself, use **Build unsigned IPA** instead. It needs no Apple Developer account and no GitHub Secrets. Every push to `main` automatically builds `Free Fire DS.ipa` and creates a GitHub Release. Its version is `v<MARKETING_VERSION>.<GitHub run number>` (for example `v1.0.42`), so each build has a unique release. The file cannot be installed until you re-sign it with your own signing tool and certificate.
+If you will sign the IPA yourself, use **Build unsigned IPA** instead. It needs no Apple Developer account and no GitHub Secrets. Every push to `main` automatically builds `FreeFireDS.ipa` and creates a GitHub Release. Its version is `v<MARKETING_VERSION>.<GitHub run number>` (for example `v1.0.42`), so each build has a unique release. The file cannot be installed until you re-sign it with your own signing tool and certificate.
 
 Before the first run, create these **repository secrets** in GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
 

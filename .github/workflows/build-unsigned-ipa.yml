@@ -64,7 +64,7 @@ jobs:
         run: |
           app_path="$(find "$GITHUB_WORKSPACE/build/Products" -maxdepth 3 -type d -name '*.app' -print -quit)"
           staging_path="$RUNNER_TEMP/ipa-staging"
-          ipa_path="$GITHUB_WORKSPACE/build/Free Fire DS.ipa"
+          ipa_path="$GITHUB_WORKSPACE/build/FreeFireDS.ipa"
 
           test -n "$app_path" && test -d "$app_path"
           mkdir -p "$staging_path/Payload"
@@ -78,7 +78,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Free-Fire-DS-IPA-${{ steps.version.outputs.tag }}
-          path: build/Free Fire DS.ipa
+          path: build/FreeFireDS.ipa
           if-no-files-found: error
           retention-days: 14
 
@@ -89,9 +89,9 @@ jobs:
           MARKETING_VERSION: ${{ steps.version.outputs.marketing_version }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "build/Free Fire DS.ipa" --clobber
+            gh release upload "$TAG" "build/FreeFireDS.ipa" --clobber
           else
-            gh release create "$TAG" "build/Free Fire DS.ipa" \
+            gh release create "$TAG" "build/FreeFireDS.ipa" \
               --title "Free Fire DS v${MARKETING_VERSION} (${GITHUB_RUN_NUMBER})" \
               --generate-notes
           fi
