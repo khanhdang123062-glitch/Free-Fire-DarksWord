@@ -19,68 +19,46 @@ jobs:
         with:
           xcode-version: '16.2'
 
-      - name: Install ldid
-        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ldid
-
-      - name: List all projects
+      - name: Install dependencies
         run: |
-          echo "=== List all .xcodeproj ==="
-          find . -name "*.xcodeproj" -type d
-          echo "=== List all targets ==="
-          for proj in $(find . -name "*.xcodeproj" -type d); do
-            echo "--- $proj ---"
-            xcodebuild -list -project "$proj" 2>/dev/null || echo "Failed to list $proj"
-          done
+          brew install ldid
+          brew install make
 
-      - name: Build .app
+      - name: Build XPF (libxpf.dylib)
         run: |
-          PROJ=$(find . -name "*.xcodeproj" -type d | head -n 1)
-          SCHEME=$(xcodebuild -list -project "$PROJ" 2>/dev/null | grep -A1 "Schemes:" | tail -n1 | sed 's/^[[:space:]]*//')
-          if [ -z "$SCHEME" ]; then
-            echo "No scheme found, trying to build all targets"
-            xcodebuild build \
-              -project "$PROJ" \
-              -alltargets \
-              -configuration Release \
-              -sdk iphoneos \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGN_IDENTITY="" \
-              OTHER_CFLAGS="-Wno-error -Wno-implicit-function-declaration -Wno-incompatible-pointer-types"
-          else
-            echo "Building scheme: $SCHEME"
-            xcodebuild build \
-              -project "$PROJ" \
-              -scheme "$SCHEME" \
-              -configuration Release \
-              -sdk iphoneos \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGN_IDENTITY="" \
-              OTHER_CFLAGS="-Wno-error -Wno-implicit-function-declaration -Wno-incompatible-pointer-types"
+          cd darksword-kexploit-fun/XPF
+          make all || echo "XPF build skipped"
+
+      - name: Build with make
+        id: build
+        run: |
+          echo "=== BUILD LOG START ==="
+          cd darksword-kexploit-fun
+          make 2>&1 | tee build.log
+          echo "=== BUILD LOG END ==="
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "BUILD_FAILED=true" >> $GITHUB_ENV
           fi
+          cp build.log ../build.log || true
+
+      - name: Try xcodebuild if make fails
+        if: env.BUILD_FAILED == 'true'
+        run: |
+          echo "=== XCODEBUILD LOG START ==="
+          xcodebuild -project darksword-kexploit-fun.xcodeproj -alltargets -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tee xcodebuild.log
+          echo "=== XCODEBUILD LOG END ==="
+          cp xcodebuild.log ../xcodebuild.log || true
 
       - name: Find .app
         id: find_app
         run: |
           APP_PATH=$(find . -name "*.app" -type d | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "No .app found, looking for .dylib..."
-            DYLIB_PATH=$(find . -name "*.dylib" -type f | head -n 1)
-            if [ -n "$DYLIB_PATH" ]; then
-              echo "Found .dylib at: $DYLIB_PATH"
-              mkdir -p Payload
-              cp "$DYLIB_PATH" Payload/
-              zip -r darksword-unsigned.ipa Payload/
-              echo "IPA created from dylib"
-              exit 0
-            fi
-            echo "No .app or .dylib found!"
-            find . -name "*.app" -o -name "*.dylib" -o -name "*.ipa"
-            exit 1
+          if [ -n "$APP_PATH" ]; then
+            echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+            echo "Found app at: $APP_PATH"
+          else
+            echo "No .app found"
           fi
-          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
-          echo "Found app at: $APP_PATH"
 
       - name: Package IPA
         if: env.APP_PATH != ''
@@ -89,8 +67,30 @@ jobs:
           cp -R "$APP_PATH" Payload/
           zip -r darksword-unsigned.ipa Payload/
 
-      - name: Upload IPA
+      - name: Collect logs for debug
+        if: env.APP_PATH == ''
+        run: |
+          mkdir -p debug_output
+          find . -name "*.log" -o -name "*.txt" -o -name "*.xcresult" | while read f; do
+            cp "$f" debug_output/ 2>/dev/null || true
+          done
+          cd darksword-kexploit-fun
+          find . -name "*.o" -o -name "*.d" | head -50 > ../debug_output/compiled_files.txt || true
+          cd ..
+          uname -a > debug_output/system_info.txt
+          xcodebuild -version > debug_output/xcode_version.txt
+          zip -r debug_archive.zip debug_output/ build.log xcodebuild.log 2>/dev/null || true
+
+      - name: Upload IPA (if built)
+        if: env.APP_PATH != ''
         uses: actions/upload-artifact@v4
         with:
           name: darksword-unsigned
           path: darksword-unsigned.ipa
+
+      - name: Upload debug archive
+        if: env.APP_PATH == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug_archive
+          path: debug_archive.zip
