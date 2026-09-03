@@ -49,7 +49,7 @@ jobs:
 
       - name: Build without Apple code signing
         run: |
-          set -o pipefail
+          set +e
           xcodebuild build \
             -project darksword-kexploit-fun.xcodeproj \
             -scheme darksword-kexploit-fun \
@@ -60,12 +60,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" 2>&1 | tee /tmp/xcodebuild.log | \
-            grep -E "^(error:|warning:.*error|.*: error:|Build FAILED|✗|CompileC|Ld )" || true
-          if grep -qE "^(error:|.*: error:)" /tmp/xcodebuild.log 2>/dev/null; then
-            echo "=== COMPILER ERRORS ==="
-            grep -E "^(error:|.*: error:)" /tmp/xcodebuild.log | head -40
-            echo "=== END ERRORS ==="
-            exit 1
+            grep -E "^(error:|warning:.*error|.*: error:|Build FAILED|✗|CompileC|Ld )"
+          xcodebuild_status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$xcodebuild_status" -ne 0 ]; then
+            echo "xcodebuild failed with exit code $xcodebuild_status"
+            grep -E "^(error:|.*: error:)" /tmp/xcodebuild.log | head -40 || true
+            exit "$xcodebuild_status"
           fi
 
       - name: Package unsigned IPA
