@@ -22,32 +22,13 @@ jobs:
           brew install ldid
           brew install make
 
-      - name: Build XPF (libxpf.dylib) for iOS arm64
-        id: build_xpf
+      - name: Fix project (remove XPF dependency)
         run: |
-          cd darksword-kexploit-fun/XPF
-          make clean || echo "No clean target"
-          SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
-          make all ARCH=arm64 CFLAGS="-isysroot $SDKROOT -arch arm64 -miphoneos-version-min=15.0" LDFLAGS="-isysroot $SDKROOT -arch arm64 -miphoneos-version-min=15.0" 2>&1 | tee ../xpf_build.log
-          mkdir -p output/ios
-          find . -name "*.dylib" -exec cp {} output/ios/ \;
-          file output/ios/*.dylib || echo "No dylib found"
-          cd ..
-          echo "XPF_BUILD_EXIT=${PIPESTATUS[0]}" >> $GITHUB_ENV
-
-      - name: Upload XPF log if failed
-        if: failure() || env.XPF_BUILD_EXIT != '0'
-        uses: actions/upload-artifact@v4
-        with:
-          name: xpf-build-log
-          path: darksword-kexploit-fun/xpf_build.log
-
-      - name: Fix project format
-        run: |
+          sed -i '' '/-lxpf/d' darksword-kexploit-fun.xcodeproj/project.pbxproj
+          sed -i '' '/LIBRARY_SEARCH_PATHS/d' darksword-kexploit-fun.xcodeproj/project.pbxproj
           sed -i '' 's/objectVersion = 77;/objectVersion = 60;/g' darksword-kexploit-fun.xcodeproj/project.pbxproj
 
-      - name: Build .app (arm64)
-        id: build_app
+      - name: Build
         run: |
           set -o pipefail
           rm -rf build
@@ -63,33 +44,28 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             SKIP_INSTALL=NO \
-            LIBRARY_SEARCH_PATHS="$(PWD)/darksword-kexploit-fun/XPF/output/ios" \
-            OTHER_LDFLAGS="-lxpf" \
             2>&1 | tee build.log
-          echo "BUILD_EXIT=${PIPESTATUS[0]}" >> $GITHUB_ENV
           exit ${PIPESTATUS[0]}
 
-      - name: Upload full build log
-        if: always()
+      - name: Upload log if failed
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
           path: build.log
 
       - name: Package IPA
-        if: success() && env.BUILD_EXIT == '0'
+        if: success()
         run: |
           set -e
           APP=$(find build/darksword.xcarchive -name "*.app" -type d | head -1)
-          echo "App found: $APP"
           test -n "$APP"
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/darksword.app
           /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload darksword-unsigned.ipa
-          echo "IPA created: darksword-unsigned.ipa"
 
       - name: Upload IPA
-        if: success() && env.BUILD_EXIT == '0'
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: darksword-unsigned-ipa
