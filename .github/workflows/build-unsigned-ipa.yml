@@ -22,20 +22,20 @@ jobs:
           brew install ldid
           brew install make
 
-      - name: Build XPF (libxpf.dylib)
+      - name: Build XPF (libxpf.dylib) for arm64
         run: |
           cd darksword-kexploit-fun/XPF
           make clean || echo "No clean target"
-          make all
+          make all ARCH=arm64
           mkdir -p output/ios
           find . -name "*.dylib" -exec cp {} output/ios/ \;
-          ls -la output/ios/ || echo "XPF build output not found"
+          file output/ios/*.dylib || echo "No dylib found"
 
       - name: Fix project format
         run: |
           sed -i '' 's/objectVersion = 77;/objectVersion = 60;/g' darksword-kexploit-fun.xcodeproj/project.pbxproj
 
-      - name: Build
+      - name: Build .app (arm64)
         run: |
           set -o pipefail
           rm -rf build
@@ -44,6 +44,8 @@ jobs:
             -scheme darksword-kexploit-fun \
             -configuration Release \
             -sdk iphoneos \
+            ARCHS="arm64" \
+            ONLY_ACTIVE_ARCH=NO \
             -archivePath build/darksword.xcarchive \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
@@ -66,10 +68,12 @@ jobs:
         run: |
           set -e
           APP=$(find build/darksword.xcarchive -name "*.app" -type d | head -1)
+          echo "App found: $APP"
           test -n "$APP"
           rm -rf Payload && mkdir Payload
           cp -R "$APP" Payload/darksword.app
           /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload darksword-unsigned.ipa
+          echo "IPA created: darksword-unsigned.ipa"
 
       - name: Upload IPA
         if: success()
