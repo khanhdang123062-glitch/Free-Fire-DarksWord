@@ -22,13 +22,15 @@ jobs:
           brew install ldid
           brew install make
 
-      - name: Build XPF (libxpf.dylib) for arm64
+      - name: Build XPF (libxpf.dylib) for iOS arm64
         run: |
           cd darksword-kexploit-fun/XPF
           make clean || echo "No clean target"
-          make all ARCH=arm64
+          SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          make all ARCH=arm64 CFLAGS="-isysroot $SDKROOT -arch arm64 -miphoneos-version-min=15.0" LDFLAGS="-isysroot $SDKROOT -arch arm64 -miphoneos-version-min=15.0"
           mkdir -p output/ios
           find . -name "*.dylib" -exec cp {} output/ios/ \;
+          echo "=== Checking dylib architecture ==="
           file output/ios/*.dylib || echo "No dylib found"
 
       - name: Fix project format
