@@ -17,6 +17,20 @@ jobs:
         with:
           xcode-version: '16.2'
 
+      - name: Install dependencies
+        run: |
+          brew install ldid
+          brew install make
+
+      - name: Build XPF (libxpf.dylib)
+        run: |
+          cd darksword-kexploit-fun/XPF
+          make clean || echo "No clean target"
+          make all
+          mkdir -p output/ios
+          find . -name "*.dylib" -exec cp {} output/ios/ \;
+          ls -la output/ios/ || echo "XPF build output not found"
+
       - name: Fix project format
         run: |
           sed -i '' 's/objectVersion = 77;/objectVersion = 60;/g' darksword-kexploit-fun.xcodeproj/project.pbxproj
@@ -35,6 +49,8 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             SKIP_INSTALL=NO \
+            LIBRARY_SEARCH_PATHS="$(PWD)/darksword-kexploit-fun/XPF/output/ios" \
+            OTHER_LDFLAGS="-lxpf" \
             2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
 
