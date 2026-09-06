@@ -26,16 +26,6 @@ jobs:
           brew install ldid
           brew install make
 
-      - name: Build XPF (libxpf.dylib) for iOS arm64
-        run: |
-          cd darksword-kexploit-fun/XPF
-          make clean || echo "No clean"
-          SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
-          make all ARCH=arm64 CFLAGS="-isysroot $SDKROOT -arch arm64 -miphoneos-version-min=15.0" LDFLAGS="-isysroot $SDKROOT -arch arm64 -miphoneos-version-min=15.0"
-          mkdir -p output/ios
-          find . -name "*.dylib" -exec cp {} output/ios/ \;
-          file output/ios/*.dylib
-
       - name: Build .app (no signing)
         id: build_app
         continue-on-error: true
@@ -51,11 +41,10 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             OTHER_CFLAGS="-Wno-error -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" \
             GCC_PREPROCESSOR_DEFINITIONS="$(GCC_PREPROCESSOR_DEFINITIONS) _FILE_OFFSET_BITS=64" \
-            LIBRARY_SEARCH_PATHS="$(PWD)/darksword-kexploit-fun/XPF/output/ios" \
             2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
 
-      - name: Upload build log if failed
+      - name: Upload log if failed
         if: failure() || steps.build_app.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
