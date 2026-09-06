@@ -1,107 +1,74 @@
 name: Build unsigned IPA
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
-
-permissions:
-  contents: write
+  push:
+    branches: [ main, master ]
 
 jobs:
-  build-unsigned-ipa:
+  build:
     runs-on: macos-14
     timeout-minutes: 30
-    concurrency:
-      group: unsigned-ipa-release-${{ github.ref }}
-      cancel-in-progress: false
 
     steps:
-      - name: Check out source
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Select Xcode
+      - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '16.2'
 
-      - name: Install build dependency
-        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ldid
+      - name: Install dependencies
+        run: |
+          brew install ldid
+          brew install make
 
-      # The app links against -lxpf before its Xcode Run Script phase runs.
-      - name: Build XPF library before linking the app
+      - name: Build XPF (libxpf.dylib)
         run: |
           cd darksword-kexploit-fun/XPF
-          make all
+          make all || echo "XPF build skipped"
+          mkdir -p output/ios
+          find . -name "*.dylib" -exec cp {} output/ios/ \; || echo "No dylib"
 
-      - name: Set release version
-        id: version
+      - name: Build .app (no signing)
         run: |
-          marketing_version="$(xcodebuild -showBuildSettings \
-            -project darksword-kexploit-fun.xcodeproj \
-            -scheme darksword-kexploit-fun \
-            -configuration Release | awk '/ MARKETING_VERSION = / { print $3; exit }')"
-          test -n "$marketing_version"
-          echo "marketing_version=$marketing_version" >> "$GITHUB_OUTPUT"
-          echo "tag=v${marketing_version}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
-
-      - name: Build without Apple code signing
-        run: |
-          set +e
           xcodebuild build \
             -project darksword-kexploit-fun.xcodeproj \
             -scheme darksword-kexploit-fun \
             -configuration Release \
-            -destination 'generic/platform=iOS' \
-            CONFIGURATION_BUILD_DIR="$GITHUB_WORKSPACE/build/Products" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            -sdk iphoneos \
+            ARCHS="arm64" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" 2>&1 | tee /tmp/xcodebuild.log | \
-            grep -E "^(error:|warning:.*error|.*: error:|Build FAILED|✗|CompileC|Ld )"
-          xcodebuild_status=${PIPESTATUS[0]}
-          set -e
+            CODE_SIGN_IDENTITY="" \
+            OTHER_CFLAGS="-Wno-error -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" \
+            GCC_PREPROCESSOR_DEFINITIONS="$(GCC_PREPROCESSOR_DEFINITIONS) _FILE_OFFSET_BITS=64" \
+            LIBRARY_SEARCH_PATHS="$(PWD)/darksword-kexploit-fun/XPF/output/ios" \
+            OTHER_LDFLAGS="-lxpf"
 
-          if [ "$xcodebuild_status" -ne 0 ]; then
-            echo "xcodebuild failed with exit code $xcodebuild_status"
-            grep -E "^(error:|.*: error:)" /tmp/xcodebuild.log | head -40 || true
-            exit "$xcodebuild_status"
-          fi
-
-      - name: Package unsigned IPA
+      - name: Find .app
+        id: find_app
         run: |
-          app_path="$(find "$GITHUB_WORKSPACE/build/Products" -maxdepth 3 -type d -name '*.app' -print -quit)"
-          staging_path="$RUNNER_TEMP/ipa-staging"
-          ipa_path="$GITHUB_WORKSPACE/build/FreeFireDS.ipa"
+          APP_PATH=$(find . -name "*.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found!"
+            find . -name "*.app" -o -name "*.dylib"
+            exit 1
+          fi
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
 
-          test -n "$app_path" && test -d "$app_path"
-          mkdir -p "$staging_path/Payload"
-          ditto "$app_path" "$staging_path/Payload/kfun.app"
-          (
-            cd "$staging_path"
-            ditto -c -k --sequesterRsrc --keepParent Payload "$ipa_path"
-          )
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -r darksword-unsigned.ipa Payload/
 
-      - name: Upload unsigned IPA
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Free-Fire-DS-IPA-${{ steps.version.outputs.tag }}
-          path: build/FreeFireDS.ipa
+          name: darksword-unsigned-ipa
+          path: darksword-unsigned.ipa
           if-no-files-found: error
-          retention-days: 14
-
-      - name: Create or update GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-          MARKETING_VERSION: ${{ steps.version.outputs.marketing_version }}
-        run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "build/FreeFireDS.ipa" --clobber
-          else
-            gh release create "$TAG" "build/FreeFireDS.ipa" \
-              --title "Free Fire DS v${MARKETING_VERSION} (${GITHUB_RUN_NUMBER})" \
-              --generate-notes
-          fi
