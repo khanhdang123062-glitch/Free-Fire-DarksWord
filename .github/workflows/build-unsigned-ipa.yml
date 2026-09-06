@@ -35,6 +35,8 @@ jobs:
           find . -name "*.dylib" -exec cp {} output/ios/ \; || echo "No dylib found"
 
       - name: Build .app (no signing)
+        id: build_app
+        continue-on-error: true
         run: |
           xcodebuild build \
             -project darksword-kexploit-fun.xcodeproj \
@@ -49,26 +51,37 @@ jobs:
             SWIFT_OPTIMIZATION_LEVEL="" \
             OTHER_CFLAGS="-Wno-error -Wno-implicit-function-declaration -Wno-incompatible-pointer-types" \
             GCC_PREPROCESSOR_DEFINITIONS="$(GCC_PREPROCESSOR_DEFINITIONS) _FILE_OFFSET_BITS=64" \
-            LIBRARY_SEARCH_PATHS="$(PWD)/darksword-kexploit-fun/XPF/output/ios"
+            LIBRARY_SEARCH_PATHS="$(PWD)/darksword-kexploit-fun/XPF/output/ios" \
+            2>&1 | tee build.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload build log
+        if: failure() || steps.build_app.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - name: Find .app
+        if: success() && steps.build_app.outcome == 'success'
         id: find_app
         run: |
           APP_PATH=$(find . -name "*.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
-            echo "No .app found! Trying to locate build artifacts..."
-            find . -name "*.app" -o -name "*.dylib"
+            echo "No .app found!"
             exit 1
           fi
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
 
       - name: Package IPA
+        if: success() && steps.build_app.outcome == 'success'
         run: |
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
           zip -r darksword-unsigned.ipa Payload/
 
       - name: Upload IPA
+        if: success() && steps.build_app.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: darksword-unsigned-ipa
