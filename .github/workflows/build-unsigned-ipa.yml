@@ -26,13 +26,15 @@ jobs:
           brew install ldid
           brew install make
 
-      - name: Build XPF (libxpf.dylib)
+      - name: Build XPF (libxpf.dylib) for iOS
         run: |
           cd darksword-kexploit-fun/XPF
           make clean || echo "No clean"
-          make all || echo "XPF build skipped"
+          SDKROOT=$(xcrun --sdk iphoneos --show-sdk-path)
+          make all ARCH=arm64 CFLAGS="-isysroot $SDKROOT -arch arm64 -miphoneos-version-min=15.0" LDFLAGS="-isysroot $SDKROOT -arch arm64 -miphoneos-version-min=15.0"
           mkdir -p output/ios
-          find . -name "*.dylib" -exec cp {} output/ios/ \; || echo "No dylib found"
+          find . -name "*.dylib" -exec cp {} output/ios/ \;
+          file output/ios/*.dylib || echo "No dylib found"
 
       - name: Build .app (no signing)
         id: build_app
@@ -67,6 +69,7 @@ jobs:
           APP_PATH=$(find . -name "*.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
             echo "No .app found!"
+            find . -name "*.app" -o -name "*.dylib"
             exit 1
           fi
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
