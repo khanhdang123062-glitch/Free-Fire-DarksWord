@@ -1,4 +1,4 @@
-name: Build unsigned IPA (no XPF)
+name: Build unsigned IPA
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
           brew install ldid
           brew install make
 
-      - name: Build .app (no signing, no XPF)
+      - name: Build .app (no signing)
         id: build_app
         continue-on-error: true
         run: |
@@ -44,7 +44,7 @@ jobs:
             2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
 
-      - name: Upload build log
+      - name: Upload build log if failed
         if: failure() || steps.build_app.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
@@ -58,10 +58,10 @@ jobs:
           APP_PATH=$(find . -name "*.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
             echo "No .app found!"
-            find . -name "*.app" -o -name "*.dylib"
             exit 1
           fi
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+          echo "Found app at: $APP_PATH"
 
       - name: Package IPA
         if: success() && steps.build_app.outcome == 'success'
