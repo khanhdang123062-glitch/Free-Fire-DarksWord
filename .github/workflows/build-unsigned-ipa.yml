@@ -1,4 +1,4 @@
-name: Build unsigned IPA
+name: Build unsigned IPA & Source
 
 on:
   push:
@@ -30,7 +30,6 @@ jobs:
       - name: Install build dependency
         run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ldid
 
-      # Build thư viện XPF trước khi liên kết app (giữ nguyên logic gốc của project)
       - name: Build XPF library before linking the app
         run: |
           if [ -d "darksword-kexploit-fun/XPF" ]; then
@@ -45,7 +44,6 @@ jobs:
             -project darksword-kexploit-fun.xcodeproj \
             -scheme darksword-kexploit-fun \
             -configuration Release | awk '/ MARKETING_VERSION = / { print $3; exit }')"
-          # Fallback nếu không đọc được version từ project
           if [ -z "$marketing_version" ]; then
             marketing_version="1.0.0"
           fi
@@ -87,11 +85,17 @@ jobs:
             ditto -c -k --sequesterRsrc --keepParent Payload "$ipa_path"
           )
 
-      - name: Upload unsigned IPA artifact
+      - name: Package Source Code Zip
+        run: |
+          git archive --format=zip HEAD -o build/SourceCode.zip
+
+      - name: Upload IPA and Source Code Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Free-Fire-DS-IPA-${{ steps.version.outputs.tag }}
-          path: build/FreeFireDS.ipa
+          name: Free-Fire-DS-Bundle-${{ steps.version.outputs.tag }}
+          path: |
+            build/FreeFireDS.ipa
+            build/SourceCode.zip
           if-no-files-found: error
           retention-days: 14
 
@@ -102,9 +106,9 @@ jobs:
           MARKETING_VERSION: ${{ steps.version.outputs.marketing_version }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "build/FreeFireDS.ipa" --clobber
+            gh release upload "$TAG" "build/FreeFireDS.ipa" "build/SourceCode.zip" --clobber
           else
-            gh release create "$TAG" "build/FreeFireDS.ipa" \
+            gh release create "$TAG" "build/FreeFireDS.ipa" "build/SourceCode.zip" \
               --title "Free Fire DS v${MARKETING_VERSION} (${GITHUB_RUN_NUMBER})" \
               --generate-notes
           fi
