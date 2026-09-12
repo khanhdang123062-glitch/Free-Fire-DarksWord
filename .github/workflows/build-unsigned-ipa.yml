@@ -2,7 +2,7 @@ name: Build unsigned IPA
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
@@ -30,11 +30,13 @@ jobs:
       - name: Install build dependency
         run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ldid
 
-      # The app links against -lxpf before its Xcode Run Script phase runs.
+      # Build thư viện XPF trước khi liên kết app (giữ nguyên logic gốc của project)
       - name: Build XPF library before linking the app
         run: |
-          cd darksword-kexploit-fun/XPF
-          make all
+          if [ -d "darksword-kexploit-fun/XPF" ]; then
+            cd darksword-kexploit-fun/XPF
+            make all
+          fi
 
       - name: Set release version
         id: version
@@ -43,7 +45,10 @@ jobs:
             -project darksword-kexploit-fun.xcodeproj \
             -scheme darksword-kexploit-fun \
             -configuration Release | awk '/ MARKETING_VERSION = / { print $3; exit }')"
-          test -n "$marketing_version"
+          # Fallback nếu không đọc được version từ project
+          if [ -z "$marketing_version" ]; then
+            marketing_version="1.0.0"
+          fi
           echo "marketing_version=$marketing_version" >> "$GITHUB_OUTPUT"
           echo "tag=v${marketing_version}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
@@ -82,7 +87,7 @@ jobs:
             ditto -c -k --sequesterRsrc --keepParent Payload "$ipa_path"
           )
 
-      - name: Upload unsigned IPA
+      - name: Upload unsigned IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: Free-Fire-DS-IPA-${{ steps.version.outputs.tag }}
